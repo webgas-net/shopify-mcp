@@ -12,28 +12,26 @@ import {
   CreateDraftOrderPayload,
   ShopifyWebhookTopic,
 } from "./ShopifyClient/ShopifyClientPort.js";
+import { StoreRegistry } from "./StoreRegistry.js";
 
 const server = new McpServer({
   name: "shopify-tools",
-  version: "1.0.0",
+  version: "2.0.0",
 });
 
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
-if (!SHOPIFY_ACCESS_TOKEN) {
-  console.error("Error: SHOPIFY_ACCESS_TOKEN environment variable is required");
-  process.exit(1);
-}
+const registry = new StoreRegistry();
 
-const MYSHOPIFY_DOMAIN = process.env.MYSHOPIFY_DOMAIN;
-if (!MYSHOPIFY_DOMAIN) {
-  console.error("Error: MYSHOPIFY_DOMAIN environment variable is required");
-  process.exit(1);
-}
+const storeParam = z
+  .string()
+  .optional()
+  .describe(
+    "Store name (from config). Omit if only one store is configured. Use list-stores to see available stores."
+  );
 
 function formatProduct(product: ProductNode): string {
   return `
-  Product: ${product.title} 
-  description: ${product.description} 
+  Product: ${product.title}
+  description: ${product.description}
   handle: ${product.handle}
   variants: ${product.variants.edges
     .map(
@@ -55,11 +53,11 @@ function formatOrder(order: ShopifyOrderGraphql): string {
   Status: ${order.displayFinancialStatus || "N/A"}
   Email: ${order.email || "N/A"}
   Phone: ${order.phone || "N/A"}
-  
+
   Total Price: ${order.totalPriceSet.shopMoney.amount} ${
     order.totalPriceSet.shopMoney.currencyCode
   }
-  
+
   Customer: ${
     order.customer
       ? `
@@ -101,23 +99,49 @@ function formatOrder(order: ShopifyOrderGraphql): string {
   `;
 }
 
-// Products Tools
+// === Store Management ===
+
+server.tool(
+  "list-stores",
+  "List all configured Shopify stores",
+  {},
+  async () => {
+    const stores = registry.listStores();
+    return {
+      content: [
+        {
+          type: "text",
+          text: stores.length > 0
+            ? stores
+                .map((s) => `${s.name}: ${s.domain}`)
+                .join("\n")
+            : "No stores configured",
+        },
+      ],
+    };
+  }
+);
+
+// === Products Tools ===
+
 server.tool(
   "get-products",
   "Get all products or search by title",
   {
+    store: storeParam,
     searchTitle: z
       .string()
       .optional()
       .describe("Search title, if missing, will return all products"),
     limit: z.number().describe("Maximum number of products to return"),
   },
-  async ({ searchTitle, limit }) => {
+  async ({ store, searchTitle, limit }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const products = await client.loadProducts(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         searchTitle ?? null,
         limit
       );
@@ -135,6 +159,7 @@ server.tool(
   "get-products-by-collection",
   "Get products from a specific collection",
   {
+    store: storeParam,
     collectionId: z
       .string()
       .describe("ID of the collection to get products from"),
@@ -144,12 +169,13 @@ server.tool(
       .default(10)
       .describe("Maximum number of products to return"),
   },
-  async ({ collectionId, limit }) => {
+  async ({ store, collectionId, limit }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const products = await client.loadProductsByCollectionId(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         collectionId,
         limit
       );
@@ -167,16 +193,18 @@ server.tool(
   "get-products-by-ids",
   "Get products by their IDs",
   {
+    store: storeParam,
     productIds: z
       .array(z.string())
       .describe("Array of product IDs to retrieve"),
   },
-  async ({ productIds }) => {
+  async ({ store, productIds }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const products = await client.loadProductsByIds(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         productIds
       );
       const formattedProducts = products.products.map(formatProduct);
@@ -193,16 +221,18 @@ server.tool(
   "get-variants-by-ids",
   "Get product variants by their IDs",
   {
+    store: storeParam,
     variantIds: z
       .array(z.string())
       .describe("Array of variant IDs to retrieve"),
   },
-  async ({ variantIds }) => {
+  async ({ store, variantIds }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const variants = await client.loadVariantsByIds(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         variantIds
       );
       return {
@@ -214,20 +244,23 @@ server.tool(
   }
 );
 
-// Customer Tools
+// === Customer Tools ===
+
 server.tool(
   "get-customers",
   "Get shopify customers with pagination support",
   {
+    store: storeParam,
     limit: z.number().optional().describe("Limit of customers to return"),
     next: z.string().optional().describe("Next page cursor"),
   },
-  async ({ limit, next }) => {
+  async ({ store, limit, next }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const response = await client.loadCustomers(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         limit,
         next
       );
@@ -244,15 +277,17 @@ server.tool(
   "tag-customer",
   "Add tags to a customer",
   {
+    store: storeParam,
     customerId: z.string().describe("Customer ID to tag"),
     tags: z.array(z.string()).describe("Tags to add to the customer"),
   },
-  async ({ customerId, tags }) => {
+  async ({ store, customerId, tags }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const success = await client.tagCustomer(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         tags,
         customerId
       );
@@ -272,11 +307,13 @@ server.tool(
   }
 );
 
-// Order Tools
+// === Order Tools ===
+
 server.tool(
   "get-orders",
   "Get shopify orders with advanced filtering and sorting",
   {
+    store: storeParam,
     first: z.number().optional().describe("Limit of orders to return"),
     after: z.string().optional().describe("Next page cursor"),
     query: z.string().optional().describe("Filter orders using query syntax"),
@@ -293,20 +330,17 @@ server.tool(
       .describe("Field to sort by"),
     reverse: z.boolean().optional().describe("Reverse sort order"),
   },
-  async ({ first, after, query, sortKey, reverse }) => {
+  async ({ store, first, after, query, sortKey, reverse }) => {
     const client = new ShopifyClient();
     try {
-      const response = await client.loadOrders(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
-        {
-          first,
-          after,
-          query,
-          sortKey,
-          reverse,
-        }
-      );
+      const s = registry.resolve(store);
+      const response = await client.loadOrders(s.accessToken, s.domain, {
+        first,
+        after,
+        query,
+        sortKey,
+        reverse,
+      });
       const formattedOrders = response.orders.map(formatOrder);
       return {
         content: [{ type: "text", text: formattedOrders.join("\n---\n") }],
@@ -321,16 +355,16 @@ server.tool(
   "get-order",
   "Get a single order by ID",
   {
+    store: storeParam,
     orderId: z.string().describe("ID of the order to retrieve"),
   },
-  async ({ orderId }) => {
+  async ({ store, orderId }) => {
     const client = new ShopifyClient();
     try {
-      const order = await client.loadOrder(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
-        { orderId }
-      );
+      const s = registry.resolve(store);
+      const order = await client.loadOrder(s.accessToken, s.domain, {
+        orderId,
+      });
       return {
         content: [{ type: "text", text: JSON.stringify(order, null, 2) }],
       };
@@ -340,11 +374,13 @@ server.tool(
   }
 );
 
-// Discount Tools
+// === Discount Tools ===
+
 server.tool(
   "create-discount",
   "Create a basic discount code",
   {
+    store: storeParam,
     title: z.string().describe("Title of the discount"),
     code: z.string().describe("Discount code that customers will enter"),
     valueType: z
@@ -360,6 +396,7 @@ server.tool(
       .describe("Whether discount can be used only once per customer"),
   },
   async ({
+    store,
     title,
     code,
     valueType,
@@ -370,6 +407,7 @@ server.tool(
   }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const discountInput: CreateBasicDiscountCodeInput = {
         title,
         code,
@@ -387,8 +425,8 @@ server.tool(
         },
       };
       const discount = await client.createBasicDiscountCode(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         discountInput
       );
       return {
@@ -400,11 +438,13 @@ server.tool(
   }
 );
 
-// Draft Order Tools
+// === Draft Order Tools ===
+
 server.tool(
   "create-draft-order",
   "Create a draft order",
   {
+    store: storeParam,
     lineItems: z
       .array(
         z.object({
@@ -428,20 +468,21 @@ server.tool(
       .describe("Shipping address details"),
     note: z.string().optional().describe("Optional note for the order"),
   },
-  async ({ lineItems, email, shippingAddress, note }) => {
+  async ({ store, lineItems, email, shippingAddress, note }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const draftOrderData: CreateDraftOrderPayload = {
         lineItems,
         email,
         shippingAddress,
-        billingAddress: shippingAddress, // Using same address for billing
+        billingAddress: shippingAddress,
         tags: "draft",
         note: note || "",
       };
       const draftOrder = await client.createDraftOrder(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         draftOrderData
       );
       return {
@@ -457,15 +498,17 @@ server.tool(
   "complete-draft-order",
   "Complete a draft order",
   {
+    store: storeParam,
     draftOrderId: z.string().describe("ID of the draft order to complete"),
     variantId: z.string().describe("ID of the variant in the draft order"),
   },
-  async ({ draftOrderId, variantId }) => {
+  async ({ store, draftOrderId, variantId }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const completedOrder = await client.completeDraftOrder(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         draftOrderId,
         variantId
       );
@@ -480,11 +523,13 @@ server.tool(
   }
 );
 
-// Collection Tools
+// === Collection Tools ===
+
 server.tool(
   "get-collections",
   "Get all collections",
   {
+    store: storeParam,
     limit: z
       .number()
       .optional()
@@ -492,12 +537,13 @@ server.tool(
       .describe("Maximum number of collections to return"),
     name: z.string().optional().describe("Filter collections by name"),
   },
-  async ({ limit, name }) => {
+  async ({ store, limit, name }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const collections = await client.loadCollections(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN,
+        s.accessToken,
+        s.domain,
         { limit, name }
       );
       return {
@@ -509,29 +555,37 @@ server.tool(
   }
 );
 
-// Shop Tools
-server.tool("get-shop", "Get shop details", {}, async () => {
-  const client = new ShopifyClient();
-  try {
-    const shop = await client.loadShop(SHOPIFY_ACCESS_TOKEN, MYSHOPIFY_DOMAIN);
-    return {
-      content: [{ type: "text", text: JSON.stringify(shop, null, 2) }],
-    };
-  } catch (error) {
-    return handleError("Failed to retrieve shop details", error);
+// === Shop Tools ===
+
+server.tool(
+  "get-shop",
+  "Get shop details",
+  { store: storeParam },
+  async ({ store }) => {
+    const client = new ShopifyClient();
+    try {
+      const s = registry.resolve(store);
+      const shop = await client.loadShop(s.accessToken, s.domain);
+      return {
+        content: [{ type: "text", text: JSON.stringify(shop, null, 2) }],
+      };
+    } catch (error) {
+      return handleError("Failed to retrieve shop details", error);
+    }
   }
-});
+);
 
 server.tool(
   "get-shop-details",
   "Get extended shop details including shipping countries",
-  {},
-  async () => {
+  { store: storeParam },
+  async ({ store }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       const shopDetails = await client.loadShopDetail(
-        SHOPIFY_ACCESS_TOKEN,
-        MYSHOPIFY_DOMAIN
+        s.accessToken,
+        s.domain
       );
       return {
         content: [{ type: "text", text: JSON.stringify(shopDetails, null, 2) }],
@@ -542,11 +596,13 @@ server.tool(
   }
 );
 
-// Webhook Tools
+// === Webhook Tools ===
+
 server.tool(
   "manage-webhook",
   "Subscribe, find, or unsubscribe webhooks",
   {
+    store: storeParam,
     action: z
       .enum(["subscribe", "find", "unsubscribe"])
       .describe("Action to perform with webhook"),
@@ -559,14 +615,15 @@ server.tool(
       .optional()
       .describe("Webhook ID (required for unsubscribe)"),
   },
-  async ({ action, callbackUrl, topic, webhookId }) => {
+  async ({ store, action, callbackUrl, topic, webhookId }) => {
     const client = new ShopifyClient();
     try {
+      const s = registry.resolve(store);
       switch (action) {
         case "subscribe": {
           const webhook = await client.subscribeWebhook(
-            SHOPIFY_ACCESS_TOKEN,
-            MYSHOPIFY_DOMAIN,
+            s.accessToken,
+            s.domain,
             callbackUrl,
             topic
           );
@@ -576,8 +633,8 @@ server.tool(
         }
         case "find": {
           const webhook = await client.findWebhookByTopicAndCallbackUrl(
-            SHOPIFY_ACCESS_TOKEN,
-            MYSHOPIFY_DOMAIN,
+            s.accessToken,
+            s.domain,
             callbackUrl,
             topic
           );
@@ -590,8 +647,8 @@ server.tool(
             throw new Error("webhookId is required for unsubscribe action");
           }
           await client.unsubscribeWebhook(
-            SHOPIFY_ACCESS_TOKEN,
-            MYSHOPIFY_DOMAIN,
+            s.accessToken,
+            s.domain,
             webhookId
           );
           return {
@@ -618,6 +675,8 @@ function handleError(
   let errorMessage = defaultMessage;
   if (error instanceof CustomError) {
     errorMessage = `${defaultMessage}: ${error.message}`;
+  } else if (error instanceof Error) {
+    errorMessage = `${defaultMessage}: ${error.message}`;
   }
   return {
     content: [{ type: "text", text: errorMessage }],
@@ -628,7 +687,9 @@ function handleError(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Shopify MCP Server running on stdio");
+  console.error(
+    `Shopify MCP Server running on stdio (${registry.listNames().length} store(s): ${registry.listNames().join(", ")})`
+  );
 }
 
 main().catch((error) => {

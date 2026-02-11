@@ -100,7 +100,7 @@ const productFragment = gql`
 export class ShopifyClient implements ShopifyClientPort {
   private readonly logger = console;
 
-  private SHOPIFY_API_VERSION = "2024-04";
+  private SHOPIFY_API_VERSION = "2025-01";
 
   static getShopifyOrdersNextPage(link: Maybe<string>): string | undefined {
     if (!link) return;

@@ -1,15 +1,15 @@
 {
-  "name": "shopify-mcp-server",
-  "version": "1.0.1",
+  "name": "@waizy-pro/shopify-mcp",
+  "version": "2.0.0",
   "main": "index.js",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\""
   },
-  "keywords": [],
-  "author": "Amir Bengherbi",
+  "keywords": ["shopify", "mcp", "multi-store"],
+  "author": "Webgas (fork of amir-bengherbi/shopify-mcp-server)",
   "license": "MIT",
-  "description": "MCP Server for Shopify API, enabling interaction with store data through GraphQL API.",
+  "description": "Multi-store MCP Server for Shopify API. Supports managing multiple Shopify stores via a single server.",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.4.1",
     "graphql-request": "^7.1.2",
@@ -28,6 +28,10 @@
     "build"
   ],
   "bin": {
-    "shopify-mcp-server": "./build/index.js"
+    "shopify-mcp": "./build/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Waizy-Pro/shopify-mcp"
   }
 }
