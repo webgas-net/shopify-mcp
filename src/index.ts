@@ -138,7 +138,7 @@ server.tool(
   async ({ store, searchTitle, limit }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const products = await client.loadProducts(
         s.accessToken,
         s.domain,
@@ -172,7 +172,7 @@ server.tool(
   async ({ store, collectionId, limit }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const products = await client.loadProductsByCollectionId(
         s.accessToken,
         s.domain,
@@ -201,7 +201,7 @@ server.tool(
   async ({ store, productIds }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const products = await client.loadProductsByIds(
         s.accessToken,
         s.domain,
@@ -229,7 +229,7 @@ server.tool(
   async ({ store, variantIds }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const variants = await client.loadVariantsByIds(
         s.accessToken,
         s.domain,
@@ -257,7 +257,7 @@ server.tool(
   async ({ store, limit, next }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const response = await client.loadCustomers(
         s.accessToken,
         s.domain,
@@ -284,7 +284,7 @@ server.tool(
   async ({ store, customerId, tags }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const success = await client.tagCustomer(
         s.accessToken,
         s.domain,
@@ -333,7 +333,7 @@ server.tool(
   async ({ store, first, after, query, sortKey, reverse }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const response = await client.loadOrders(s.accessToken, s.domain, {
         first,
         after,
@@ -361,7 +361,7 @@ server.tool(
   async ({ store, orderId }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const order = await client.loadOrder(s.accessToken, s.domain, {
         orderId,
       });
@@ -407,7 +407,7 @@ server.tool(
   }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const discountInput: CreateBasicDiscountCodeInput = {
         title,
         code,
@@ -471,7 +471,7 @@ server.tool(
   async ({ store, lineItems, email, shippingAddress, note }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const draftOrderData: CreateDraftOrderPayload = {
         lineItems,
         email,
@@ -505,7 +505,7 @@ server.tool(
   async ({ store, draftOrderId, variantId }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const completedOrder = await client.completeDraftOrder(
         s.accessToken,
         s.domain,
@@ -540,7 +540,7 @@ server.tool(
   async ({ store, limit, name }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const collections = await client.loadCollections(
         s.accessToken,
         s.domain,
@@ -564,7 +564,7 @@ server.tool(
   async ({ store }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const shop = await client.loadShop(s.accessToken, s.domain);
       return {
         content: [{ type: "text", text: JSON.stringify(shop, null, 2) }],
@@ -582,7 +582,7 @@ server.tool(
   async ({ store }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       const shopDetails = await client.loadShopDetail(
         s.accessToken,
         s.domain
@@ -618,7 +618,7 @@ server.tool(
   async ({ store, action, callbackUrl, topic, webhookId }) => {
     const client = new ShopifyClient();
     try {
-      const s = registry.resolve(store);
+      const s = await registry.resolve(store);
       switch (action) {
         case "subscribe": {
           const webhook = await client.subscribeWebhook(
